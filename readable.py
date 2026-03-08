@@ -10,29 +10,32 @@
 # Run server:       uv run readable.py
 # Fetch article:    http://localhost:8080/fetch?url=https://...
 
-import os
-import sys
-import json
 import asyncio
 import hashlib
+import json
+import os
 import shutil
-import zipfile
+import sys
 import urllib.request
-from pathlib import Path
+import zipfile
 from datetime import datetime, timedelta
-from flask import Flask, redirect, request, send_file, abort
+from pathlib import Path
+
+from flask import Flask, abort, redirect, request, send_file
 from patchright.async_api import async_playwright
 
 BASE_DIR = Path(__file__).parent
 EXTENSION_DIR = BASE_DIR / "extensions" / "ublock-origin-lite"
-BPC_DIR       = BASE_DIR / "extensions" / "bypass-paywalls-clean"
+BPC_DIR = BASE_DIR / "extensions" / "bypass-paywalls-clean"
 READABILITY_JS = BASE_DIR / "extensions" / "Readability.js"
-ARTICLES_DIR  = BASE_DIR / "articles"
+ARTICLES_DIR = BASE_DIR / "articles"
 
-READABILITY_URL = "https://raw.githubusercontent.com/mozilla/readability/main/Readability.js"
+READABILITY_URL = (
+    "https://raw.githubusercontent.com/mozilla/readability/main/Readability.js"
+)
 BPC_URL = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass-paywalls-chrome-clean-master.zip"
 
-READER_TEMPLATE = (BASE_DIR / "reader.html").read_text(encoding="utf-8")
+READER_TEMPLATE = (BASE_DIR / "article.html").read_text(encoding="utf-8")
 
 
 UPDATE_INTERVAL = timedelta(weeks=1)
@@ -51,7 +54,9 @@ def ensure_ublock() -> Path:
     print("Downloading uBlock Origin Lite...")
     if EXTENSION_DIR.exists():
         shutil.rmtree(EXTENSION_DIR)
-    api = urllib.request.urlopen("https://api.github.com/repos/uBlockOrigin/uBOL-home/releases/latest")
+    api = urllib.request.urlopen(
+        "https://api.github.com/repos/uBlockOrigin/uBOL-home/releases/latest"
+    )
     release = json.load(api)
     asset = next(a for a in release["assets"] if "chromium" in a["name"])
     zip_path = EXTENSION_DIR.parent / asset["name"]
@@ -126,7 +131,9 @@ async def fetch_article(url: str, output: Path) -> bool:
 
     if article:
         output.write_text(
-            READER_TEMPLATE.format(title=article["title"], content=article["content"], url=url),
+            READER_TEMPLATE.format(
+                title=article["title"], content=article["content"], url=url
+            ),
             encoding="utf-8",
         )
         return True
