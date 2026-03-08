@@ -32,23 +32,7 @@ ARTICLES_DIR  = BASE_DIR / "articles"
 READABILITY_URL = "https://raw.githubusercontent.com/mozilla/readability/main/Readability.js"
 BPC_URL = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass-paywalls-chrome-clean-master.zip"
 
-READER_TEMPLATE = """<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>{title}</title>
-  <style>
-    body {{ max-width: 700px; margin: 40px auto; font-family: Georgia, serif;
-           font-size: 1.1em; line-height: 1.7; color: #222; padding: 0 1em; }}
-    h1 {{ font-size: 1.8em; line-height: 1.3; }}
-    img {{ max-width: 100%; }}
-  </style>
-</head>
-<body>
-  <h1>{title}</h1>
-  {content}
-</body>
-</html>"""
+READER_TEMPLATE = (BASE_DIR / "reader.html").read_text(encoding="utf-8")
 
 
 UPDATE_INTERVAL = timedelta(weeks=1)
@@ -142,7 +126,7 @@ async def fetch_article(url: str, output: Path) -> bool:
 
     if article:
         output.write_text(
-            READER_TEMPLATE.format(title=article["title"], content=article["content"]),
+            READER_TEMPLATE.format(title=article["title"], content=article["content"], url=url),
             encoding="utf-8",
         )
         return True
