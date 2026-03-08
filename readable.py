@@ -10,6 +10,7 @@
 # Run server:       uv run readable.py
 # Fetch article:    http://localhost:8080/fetch?url=https://...
 
+import os
 import sys
 import json
 import asyncio
@@ -124,6 +125,7 @@ async def fetch_article(url: str, output: Path) -> bool:
             args=[
                 f"--disable-extensions-except={extensions}",
                 f"--load-extension={extensions}",
+                *(["--no-sandbox"] if os.environ.get("NO_SANDBOX") else []),
             ],
         )
         page = await context.new_page()
