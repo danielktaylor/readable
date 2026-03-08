@@ -152,6 +152,11 @@ async def fetch_article(url: str, output: Path) -> bool:
 app = Flask(__name__)
 
 
+@app.get("/")
+def index():
+    return send_file(BASE_DIR / "index.html")
+
+
 @app.get("/fetch")
 def fetch():
     url = request.args.get("url")
