@@ -3,21 +3,28 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "patchright",
+#     "flask",
 # ]
 # ///
 # First-time setup: uv run --with patchright python -m patchright install chromium
+# Run server:       uv run readable.py
+# Fetch article:    http://localhost:8080/fetch?url=https://...
 
 import sys
 import json
 import asyncio
+import hashlib
 import zipfile
 import urllib.request
 from pathlib import Path
+from flask import Flask, redirect, request, send_file, abort
 from patchright.async_api import async_playwright
 
-EXTENSION_DIR = Path(__file__).parent / "extensions" / "ublock-origin-lite"
-BPC_DIR = Path(__file__).parent / "extensions" / "bypass-paywalls-clean"
-READABILITY_JS = Path(__file__).parent / "extensions" / "Readability.js"
+BASE_DIR = Path(__file__).parent
+EXTENSION_DIR = BASE_DIR / "extensions" / "ublock-origin-lite"
+BPC_DIR       = BASE_DIR / "extensions" / "bypass-paywalls-clean"
+READABILITY_JS = BASE_DIR / "extensions" / "Readability.js"
+ARTICLES_DIR  = BASE_DIR / "articles"
 
 READABILITY_URL = "https://raw.githubusercontent.com/mozilla/readability/main/Readability.js"
 BPC_URL = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass-paywalls-chrome-clean-master.zip"
@@ -44,7 +51,6 @@ READER_TEMPLATE = """<!DOCTYPE html>
 def ensure_ublock() -> Path:
     if EXTENSION_DIR.exists():
         return EXTENSION_DIR
-
     print("Downloading uBlock Origin Lite...")
     api = urllib.request.urlopen("https://api.github.com/repos/uBlockOrigin/uBOL-home/releases/latest")
     release = json.load(api)
@@ -62,7 +68,6 @@ def ensure_ublock() -> Path:
 def ensure_bpc() -> Path:
     if BPC_DIR.exists():
         return BPC_DIR
-
     print("Downloading Bypass Paywalls Clean...")
     BPC_DIR.parent.mkdir(parents=True, exist_ok=True)
     zip_path = BPC_DIR.parent / "bypass-paywalls-clean.zip"
@@ -85,7 +90,11 @@ def ensure_readability() -> Path:
     return READABILITY_JS
 
 
-async def fetch_article(url: str, output: str = "article.html") -> None:
+def article_id(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:7]
+
+
+async def fetch_article(url: str, output: Path) -> bool:
     ublock = str(ensure_ublock())
     bpc = str(ensure_bpc())
     readability = ensure_readability()
@@ -102,6 +111,7 @@ async def fetch_article(url: str, output: str = "article.html") -> None:
         )
         page = await context.new_page()
         await page.goto(url, wait_until="load", timeout=60000)
+        await page.reload(wait_until="load", timeout=60000)
 
         readability_src = readability.read_text(encoding="utf-8")
         article = await page.evaluate(f"""() => {{
@@ -112,20 +122,47 @@ async def fetch_article(url: str, output: str = "article.html") -> None:
         await context.close()
 
     if article:
-        Path(output).write_text(
+        output.write_text(
             READER_TEMPLATE.format(title=article["title"], content=article["content"]),
             encoding="utf-8",
         )
-        print(f"Reader view saved to {output}")
-    else:
-        print("Readability could not parse an article from this page.")
+        return True
+    return False
+
+
+app = Flask(__name__)
+
+
+@app.get("/fetch")
+def fetch():
+    url = request.args.get("url")
+    if not url:
+        abort(400, "Missing ?url= parameter")
+
+    aid = article_id(url)
+    output = ARTICLES_DIR / f"{aid}.html"
+
+    if not output.exists():
+        ARTICLES_DIR.mkdir(exist_ok=True)
+        print(f"Fetching {url}")
+        found = asyncio.run(fetch_article(url, output))
+        if not found:
+            abort(422, "Readability could not parse an article from this page.")
+
+    return redirect(f"/article/{aid}")
+
+
+@app.get("/article/<aid>")
+def article(aid: str):
+    path = ARTICLES_DIR / f"{aid}.html"
+    if not path.exists():
+        abort(404)
+    return send_file(path)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: uv run screenshot.py <url> [output.html]")
-        sys.exit(1)
-
-    url = sys.argv[1]
-    output = sys.argv[2] if len(sys.argv) > 2 else "article.html"
-    asyncio.run(fetch_article(url, output))
+    # Pre-download extensions before starting the server
+    ensure_ublock()
+    ensure_bpc()
+    ensure_readability()
+    app.run(port=8080)
