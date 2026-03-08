@@ -14,9 +14,11 @@ import sys
 import json
 import asyncio
 import hashlib
+import shutil
 import zipfile
 import urllib.request
 from pathlib import Path
+from datetime import datetime, timedelta
 from flask import Flask, redirect, request, send_file, abort
 from patchright.async_api import async_playwright
 
@@ -48,10 +50,22 @@ READER_TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 
+UPDATE_INTERVAL = timedelta(weeks=1)
+
+
+def is_stale(path: Path) -> bool:
+    if not path.exists():
+        return True
+    age = datetime.now() - datetime.fromtimestamp(path.stat().st_mtime)
+    return age > UPDATE_INTERVAL
+
+
 def ensure_ublock() -> Path:
-    if EXTENSION_DIR.exists():
+    if not is_stale(EXTENSION_DIR):
         return EXTENSION_DIR
     print("Downloading uBlock Origin Lite...")
+    if EXTENSION_DIR.exists():
+        shutil.rmtree(EXTENSION_DIR)
     api = urllib.request.urlopen("https://api.github.com/repos/uBlockOrigin/uBOL-home/releases/latest")
     release = json.load(api)
     asset = next(a for a in release["assets"] if "chromium" in a["name"])
@@ -66,9 +80,11 @@ def ensure_ublock() -> Path:
 
 
 def ensure_bpc() -> Path:
-    if BPC_DIR.exists():
+    if not is_stale(BPC_DIR):
         return BPC_DIR
     print("Downloading Bypass Paywalls Clean...")
+    if BPC_DIR.exists():
+        shutil.rmtree(BPC_DIR)
     BPC_DIR.parent.mkdir(parents=True, exist_ok=True)
     zip_path = BPC_DIR.parent / "bypass-paywalls-clean.zip"
     urllib.request.urlretrieve(BPC_URL, zip_path)
@@ -82,11 +98,12 @@ def ensure_bpc() -> Path:
 
 
 def ensure_readability() -> Path:
-    if not READABILITY_JS.exists():
-        print("Downloading Readability.js...")
-        READABILITY_JS.parent.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(READABILITY_URL, READABILITY_JS)
-        print(f"Installed to {READABILITY_JS}")
+    if not is_stale(READABILITY_JS):
+        return READABILITY_JS
+    print("Downloading Readability.js...")
+    READABILITY_JS.parent.mkdir(parents=True, exist_ok=True)
+    urllib.request.urlretrieve(READABILITY_URL, READABILITY_JS)
+    print(f"Installed to {READABILITY_JS}")
     return READABILITY_JS
 
 
