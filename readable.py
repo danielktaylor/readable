@@ -113,10 +113,11 @@ def article_id(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:7]
 
 
-async def fetch_article(url: str, output: Path, debug: bool = False, use_defuddle: bool = False) -> bool:
+async def fetch_article(url: str, output: Path, debug: bool = False) -> bool:
     ublock = str(ensure_ublock())
     bpc = str(ensure_bpc())
-    parser_js = ensure_defuddle() if use_defuddle else ensure_readability()
+    readability_src = ensure_readability().read_text(encoding="utf-8")
+    defuddle_src = ensure_defuddle().read_text(encoding="utf-8")
     extensions = f"{ublock},{bpc}"
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
@@ -134,23 +135,26 @@ async def fetch_article(url: str, output: Path, debug: bool = False, use_defuddl
         await page.reload(wait_until="load", timeout=60000)
 
         if debug:
-            parser_name = "Defuddle" if use_defuddle else "Readability"
-            input(f"Press Enter to inject {parser_name} and extract article...")
+            input("Press Enter to inject parsers and extract article...")
 
-        parser_src = parser_js.read_text(encoding="utf-8")
-        if use_defuddle:
-            article = await page.evaluate(f"""() => {{
-                {parser_src}
-                const result = new Defuddle(document).parse();
-                return result ? {{ title: result.title, content: result.content }} : null;
-            }}""")
-        else:
-            article = await page.evaluate(f"""() => {{
-                {parser_src}
-                const article = new Readability(document.cloneNode(true)).parse();
-                return article ? {{ title: article.title, content: article.content }} : null;
-            }}""")
+        results = await page.evaluate(f"""() => {{
+            {readability_src}
+            {defuddle_src}
+            const r = new Readability(document.cloneNode(true)).parse();
+            const d = new Defuddle(document).parse();
+            return {{
+                readability: r ? {{ title: r.title, content: r.content }} : null,
+                defuddle: d ? {{ title: d.title, content: d.content }} : null,
+            }};
+        }}""")
         await context.close()
+
+    r = results.get("readability")
+    d = results.get("defuddle")
+    if r and d:
+        article = r if len(r["content"]) >= len(d["content"]) else d
+    else:
+        article = r or d
 
     if article:
         output.write_text(
@@ -188,7 +192,6 @@ def fetch():
                 url,
                 output,
                 debug=app.config.get("DEBUG_FETCH", False),
-                use_defuddle=app.config.get("USE_DEFUDDLE", False),
             )
         )
         if not found:
@@ -212,21 +215,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Run Chrome in non-headless mode and pause before injecting the parser",
     )
-    parser.add_argument(
-        "--defuddle",
-        action="store_true",
-        help="Use Defuddle instead of Readability.js to extract article content",
-    )
     args = parser.parse_args()
 
     app.config["DEBUG_FETCH"] = args.debug
-    app.config["USE_DEFUDDLE"] = args.defuddle
 
     # Pre-download extensions before starting the server
     ensure_ublock()
     ensure_bpc()
-    if args.defuddle:
-        ensure_defuddle()
-    else:
-        ensure_readability()
+    ensure_readability()
+    ensure_defuddle()
     app.run(port=8080)

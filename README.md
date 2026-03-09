@@ -1,17 +1,17 @@
 # readable
 
-A Flask server that fetches articles from behind paywalls and returns clean, readable HTML using [Readability.js](https://github.com/mozilla/readability).
+A Flask server that fetches articles from behind paywalls and returns clean, readable HTML.
 
 ## How it works
 
-1. Launches a headless Chromium browser with two extensions loaded (pass `--defuddle` to use [Defuddle](https://github.com/kepano/defuddle) instead of Readability.js):
+1. Launches a headless Chromium browser with two extensions loaded:
    - **[Bypass Paywalls Clean](https://gitflic.ru/project/magnolia1234/bypass-paywalls-chrome-clean)** — bypasses paywalls on supported news sites
    - **[uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home)** — blocks ads and trackers
 2. Navigates to the requested URL and waits for the page to fully load
-3. Runs Readability.js to extract the article content
+3. Runs both [Readability.js](https://github.com/mozilla/readability) and [Defuddle](https://github.com/kepano/defuddle) to extract the article content, then saves whichever result is larger
 4. Returns a persistent URL to the cleaned-up HTML
 
-Extensions and Readability.js are downloaded automatically on first run and updated weekly.
+Extensions, Readability.js, and Defuddle are downloaded automatically on first run and updated weekly.
 
 ## Usage
 
@@ -23,9 +23,6 @@ uv run --with patchright python -m patchright install chromium
 
 # Start the server
 uv run readable.py
-
-# Use Defuddle instead of Readability.js for content extraction
-uv run readable.py --defuddle
 
 # Debug mode: opens a visible Chrome window and pauses before extracting
 uv run readable.py --debug
