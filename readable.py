@@ -10,12 +10,12 @@
 # Run server:       uv run readable.py
 # Fetch article:    http://localhost:8080/fetch?url=https://...
 
+import argparse
 import asyncio
 import hashlib
 import json
 import os
 import shutil
-import sys
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta
@@ -101,7 +101,7 @@ def article_id(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:7]
 
 
-async def fetch_article(url: str, output: Path) -> bool:
+async def fetch_article(url: str, output: Path, debug: bool = False) -> bool:
     ublock = str(ensure_ublock())
     bpc = str(ensure_bpc())
     readability = ensure_readability()
@@ -109,7 +109,7 @@ async def fetch_article(url: str, output: Path) -> bool:
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
             user_data_dir="",
-            # headless=False,
+            headless=not debug,
             no_viewport=True,
             args=[
                 f"--disable-extensions-except={extensions}",
@@ -120,6 +120,9 @@ async def fetch_article(url: str, output: Path) -> bool:
         page = await context.new_page()
         await page.goto(url, wait_until="load", timeout=60000)
         await page.reload(wait_until="load", timeout=60000)
+
+        if debug:
+            input("Press Enter to inject Readability and extract article...")
 
         readability_src = readability.read_text(encoding="utf-8")
         article = await page.evaluate(f"""() => {{
@@ -160,7 +163,9 @@ def fetch():
     if not output.exists():
         ARTICLES_DIR.mkdir(exist_ok=True)
         print(f"Fetching {url}")
-        found = asyncio.run(fetch_article(url, output))
+        found = asyncio.run(
+            fetch_article(url, output, debug=app.config.get("DEBUG_FETCH", False))
+        )
         if not found:
             abort(422, "Readability could not parse an article from this page.")
 
@@ -176,6 +181,16 @@ def article(aid: str):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Run Chrome in non-headless mode and pause before injecting Readability",
+    )
+    args = parser.parse_args()
+
+    app.config["DEBUG_FETCH"] = args.debug
+
     # Pre-download extensions before starting the server
     ensure_ublock()
     ensure_bpc()

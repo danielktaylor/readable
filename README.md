@@ -23,6 +23,9 @@ uv run --with patchright python -m patchright install chromium
 
 # Start the server
 uv run readable.py
+
+# Debug mode: opens a visible Chrome window and pauses before extracting
+uv run readable.py --debug
 ```
 
 ### Docker
