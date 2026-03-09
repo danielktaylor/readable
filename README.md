@@ -4,7 +4,7 @@ A Flask server that fetches articles from behind paywalls and returns clean, rea
 
 ## How it works
 
-1. Launches a headless Chromium browser with two extensions loaded:
+1. Launches a headless Chromium browser with two extensions loaded (pass `--defuddle` to use [Defuddle](https://github.com/kepano/defuddle) instead of Readability.js):
    - **[Bypass Paywalls Clean](https://gitflic.ru/project/magnolia1234/bypass-paywalls-chrome-clean)** — bypasses paywalls on supported news sites
    - **[uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home)** — blocks ads and trackers
 2. Navigates to the requested URL and waits for the page to fully load
@@ -23,6 +23,9 @@ uv run --with patchright python -m patchright install chromium
 
 # Start the server
 uv run readable.py
+
+# Use Defuddle instead of Readability.js for content extraction
+uv run readable.py --defuddle
 
 # Debug mode: opens a visible Chrome window and pauses before extracting
 uv run readable.py --debug

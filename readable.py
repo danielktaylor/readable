@@ -28,11 +28,13 @@ BASE_DIR = Path(__file__).parent
 EXTENSION_DIR = BASE_DIR / "extensions" / "ublock-origin-lite"
 BPC_DIR = BASE_DIR / "extensions" / "bypass-paywalls-clean"
 READABILITY_JS = BASE_DIR / "extensions" / "Readability.js"
+DEFUDDLE_JS = BASE_DIR / "extensions" / "defuddle.js"
 ARTICLES_DIR = BASE_DIR / "articles"
 
 READABILITY_URL = (
     "https://raw.githubusercontent.com/mozilla/readability/main/Readability.js"
 )
+DEFUDDLE_URL = "https://unpkg.com/defuddle@latest/dist/index.js"
 BPC_URL = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass-paywalls-chrome-clean-master.zip"
 
 READER_TEMPLATE = (BASE_DIR / "article.html").read_text(encoding="utf-8")
@@ -97,14 +99,24 @@ def ensure_readability() -> Path:
     return READABILITY_JS
 
 
+def ensure_defuddle() -> Path:
+    if not is_stale(DEFUDDLE_JS):
+        return DEFUDDLE_JS
+    print("Downloading defuddle...")
+    DEFUDDLE_JS.parent.mkdir(parents=True, exist_ok=True)
+    urllib.request.urlretrieve(DEFUDDLE_URL, DEFUDDLE_JS)
+    print(f"Installed to {DEFUDDLE_JS}")
+    return DEFUDDLE_JS
+
+
 def article_id(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:7]
 
 
-async def fetch_article(url: str, output: Path, debug: bool = False) -> bool:
+async def fetch_article(url: str, output: Path, debug: bool = False, use_defuddle: bool = False) -> bool:
     ublock = str(ensure_ublock())
     bpc = str(ensure_bpc())
-    readability = ensure_readability()
+    parser_js = ensure_defuddle() if use_defuddle else ensure_readability()
     extensions = f"{ublock},{bpc}"
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
@@ -122,14 +134,22 @@ async def fetch_article(url: str, output: Path, debug: bool = False) -> bool:
         await page.reload(wait_until="load", timeout=60000)
 
         if debug:
-            input("Press Enter to inject Readability and extract article...")
+            parser_name = "Defuddle" if use_defuddle else "Readability"
+            input(f"Press Enter to inject {parser_name} and extract article...")
 
-        readability_src = readability.read_text(encoding="utf-8")
-        article = await page.evaluate(f"""() => {{
-            {readability_src}
-            const article = new Readability(document.cloneNode(true)).parse();
-            return article ? {{ title: article.title, content: article.content }} : null;
-        }}""")
+        parser_src = parser_js.read_text(encoding="utf-8")
+        if use_defuddle:
+            article = await page.evaluate(f"""() => {{
+                {parser_src}
+                const result = new Defuddle(document).parse();
+                return result ? {{ title: result.title, content: result.content }} : null;
+            }}""")
+        else:
+            article = await page.evaluate(f"""() => {{
+                {parser_src}
+                const article = new Readability(document.cloneNode(true)).parse();
+                return article ? {{ title: article.title, content: article.content }} : null;
+            }}""")
         await context.close()
 
     if article:
@@ -164,10 +184,15 @@ def fetch():
         ARTICLES_DIR.mkdir(exist_ok=True)
         print(f"Fetching {url}")
         found = asyncio.run(
-            fetch_article(url, output, debug=app.config.get("DEBUG_FETCH", False))
+            fetch_article(
+                url,
+                output,
+                debug=app.config.get("DEBUG_FETCH", False),
+                use_defuddle=app.config.get("USE_DEFUDDLE", False),
+            )
         )
         if not found:
-            abort(422, "Readability could not parse an article from this page.")
+            abort(422, "Could not parse an article from this page.")
 
     return redirect(f"/article/{aid}")
 
@@ -185,14 +210,23 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Run Chrome in non-headless mode and pause before injecting Readability",
+        help="Run Chrome in non-headless mode and pause before injecting the parser",
+    )
+    parser.add_argument(
+        "--defuddle",
+        action="store_true",
+        help="Use Defuddle instead of Readability.js to extract article content",
     )
     args = parser.parse_args()
 
     app.config["DEBUG_FETCH"] = args.debug
+    app.config["USE_DEFUDDLE"] = args.defuddle
 
     # Pre-download extensions before starting the server
     ensure_ublock()
     ensure_bpc()
-    ensure_readability()
+    if args.defuddle:
+        ensure_defuddle()
+    else:
+        ensure_readability()
     app.run(port=8080)
