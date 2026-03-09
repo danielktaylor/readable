@@ -107,10 +107,18 @@
     <button type="submit" id="btn">Read</button>
   </form>
   <script>
+    const btn = document.getElementById('btn');
+
     document.getElementById('form').addEventListener('submit', function () {
-      const btn = document.getElementById('btn');
       btn.disabled = true;
       btn.innerHTML = '<span class="dots"><span></span><span></span><span></span></span>';
+    });
+
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) {
+        btn.disabled = false;
+        btn.textContent = 'Read';
+      }
     });
   </script>
 </body>
