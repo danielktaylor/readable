@@ -4,6 +4,7 @@
 # dependencies = [
 #     "patchright",
 #     "flask",
+#     "boto3",
 # ]
 # ///
 # First-time setup: uv run --with patchright python -m patchright install chromium
@@ -21,6 +22,8 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from flask import Flask, abort, redirect, request, send_file
 from patchright.async_api import async_playwright
 
@@ -38,6 +41,42 @@ DEFUDDLE_URL = "https://unpkg.com/defuddle@latest/dist/index.js"
 BPC_URL = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass-paywalls-chrome-clean-master.zip"
 
 READER_TEMPLATE = (BASE_DIR / "article.html").read_text(encoding="utf-8")
+
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
+R2_BUCKET = os.environ.get("R2_BUCKET")
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+
+
+def r2_client():
+    if not all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET]):
+        return None
+    return boto3.client(
+        "s3",
+        endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+        aws_access_key_id=R2_ACCESS_KEY_ID,
+        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+        region_name="auto",
+    )
+
+
+def upload_to_r2(aid: str, path: Path) -> str | None:
+    client = r2_client()
+    if not client:
+        return None
+    key = f"articles/{aid}.html"
+    try:
+        client.upload_file(
+            str(path), R2_BUCKET, key,
+            ExtraArgs={"ContentType": "text/html; charset=utf-8"},
+        )
+        if R2_PUBLIC_URL:
+            return f"{R2_PUBLIC_URL}/{key}"
+        return f"https://{R2_BUCKET}.r2.dev/{key}"
+    except (BotoCoreError, ClientError) as e:
+        print(f"R2 upload failed: {e}")
+        return None
 
 
 UPDATE_INTERVAL = timedelta(weeks=1)
@@ -184,6 +223,7 @@ def fetch():
     aid = article_id(url)
     output = ARTICLES_DIR / f"{aid}.html"
 
+    r2_url = None
     if not output.exists():
         ARTICLES_DIR.mkdir(exist_ok=True)
         print(f"Fetching {url}")
@@ -196,8 +236,12 @@ def fetch():
         )
         if not found:
             abort(422, "Could not parse an article from this page.")
+        r2_url = upload_to_r2(aid, output)
+        if r2_url:
+            print(f"Uploaded to {r2_url}")
+            output.unlink()
 
-    return redirect(f"/article/{aid}")
+    return redirect(r2_url or f"/article/{aid}")
 
 
 @app.get("/article/<aid>")

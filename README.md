@@ -52,6 +52,27 @@ Returns the cached reader-view HTML for a previously fetched article.
 http://localhost:8080/article/a73b30c
 ```
 
+## Cloudflare R2 (persistent public URLs)
+
+Articles can be automatically uploaded to Cloudflare R2 so each article gets a permanent public URL. The free tier includes 10 GB storage and 10M reads/month.
+
+### Setup
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **R2** and create a bucket
+2. Under **Manage R2 API Tokens**, create a token with **Object Read & Write** permission
+3. On your bucket's **Settings** tab, enable **R2.dev subdomain** (or connect a custom domain) to get a public URL
+4. Set these environment variables before starting the server:
+
+```bash
+export R2_ACCOUNT_ID=your_account_id      # Cloudflare account ID (found in the dashboard sidebar)
+export R2_ACCESS_KEY_ID=your_key_id       # R2 API token key ID
+export R2_SECRET_ACCESS_KEY=your_secret   # R2 API token secret
+export R2_BUCKET=your_bucket_name
+export R2_PUBLIC_URL=https://pub-xxx.r2.dev  # optional: defaults to https://<bucket>.r2.dev
+```
+
+When R2 is configured, the server redirects to the public R2 URL after fetching. Without R2, articles are served locally at `/article/<id>`.
+
 ## Supported sites
 
 Any site supported by [Bypass Paywalls Clean](https://gitflic.ru/project/magnolia1234/bypass-paywalls-chrome-clean). This includes the New York Times, The Atlantic, The Washington Post, Financial Times, and many others.
