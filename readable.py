@@ -219,6 +219,8 @@ def fetch():
     url = request.args.get("url")
     if not url:
         abort(400, "Missing ?url= parameter")
+    if not url.startswith(("http://", "https://")):
+        abort(400, "URL must use http or https")
 
     aid = article_id(url)
     output = ARTICLES_DIR / f"{aid}.html"
@@ -246,6 +248,8 @@ def fetch():
 
 @app.get("/article/<aid>")
 def article(aid: str):
+    if not aid.isalnum():
+        abort(400)
     path = ARTICLES_DIR / f"{aid}.html"
     if not path.exists():
         abort(404)
