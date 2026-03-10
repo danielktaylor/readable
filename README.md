@@ -31,6 +31,8 @@ uv run readable.py --debug
 ### Docker
 
 ```bash
+cp .env.sample .env
+# edit .env and fill in your Cloudflare R2 credentials
 docker compose up --build
 ```
 
@@ -61,14 +63,18 @@ Articles can be automatically uploaded to Cloudflare R2 so each article gets a p
 1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **R2** and create a bucket
 2. Under **Manage R2 API Tokens**, create a token with **Object Read & Write** permission
 3. On your bucket's **Settings** tab, enable **R2.dev subdomain** (or connect a custom domain) to get a public URL
-4. Set these environment variables before starting the server:
+4. Copy `.env.sample` to `.env` and fill in your credentials:
 
 ```bash
-export R2_ACCOUNT_ID=your_account_id      # Cloudflare account ID (found in the dashboard sidebar)
-export R2_ACCESS_KEY_ID=your_key_id       # R2 API token key ID
-export R2_SECRET_ACCESS_KEY=your_secret   # R2 API token secret
-export R2_BUCKET=your_bucket_name
-export R2_PUBLIC_URL=https://pub-xxx.r2.dev  # optional: defaults to https://<bucket>.r2.dev
+cp .env.sample .env
+```
+
+```ini
+R2_ACCOUNT_ID=your_account_id      # Cloudflare account ID (found in the dashboard sidebar)
+R2_ACCESS_KEY_ID=your_key_id       # R2 API token key ID
+R2_SECRET_ACCESS_KEY=your_secret   # R2 API token secret
+R2_BUCKET=your_bucket_name
+R2_PUBLIC_URL=https://pub-xxx.r2.dev  # optional: defaults to https://<bucket>.r2.dev
 ```
 
 When R2 is configured, the server redirects to the public R2 URL after fetching. Without R2, articles are served locally at `/article/<id>`.
