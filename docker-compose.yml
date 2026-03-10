@@ -1,8 +1,10 @@
 services:
   readable:
     build: .
+    restart: unless-stopped
+    container_name: readable
     ports:
-      - "8080:8080"
+      - "6811:8080"
     env_file:
       - .env
     environment:
@@ -12,3 +14,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - caddy-network
+
+networks:
+  caddy-network:
+    name: caddy-network
