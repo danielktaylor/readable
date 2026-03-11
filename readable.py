@@ -272,4 +272,4 @@ if __name__ == "__main__":
     ensure_bpc()
     ensure_readability()
     ensure_defuddle()
-    app.run(port=8080)
+    app.run(host="0.0.0.0", port=8080)
