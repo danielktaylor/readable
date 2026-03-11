@@ -35,7 +35,7 @@ uv run readable.py --debug
 ```bash
 cp .env.sample .env
 # edit .env and fill in your Cloudflare R2 credentials
-docker compose up --build
+docker compose up -d --build
 ```
 
 ## Cloudflare R2 (persistent public URLs)
