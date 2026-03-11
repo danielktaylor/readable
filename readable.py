@@ -5,6 +5,7 @@
 #     "patchright",
 #     "flask",
 #     "boto3",
+#     "stealth-requests",
 # ]
 # ///
 # First-time setup: uv run --with patchright python -m patchright install chromium
@@ -14,11 +15,11 @@
 import argparse
 import asyncio
 import hashlib
-import json
 import os
 import shutil
-import urllib.request
 import zipfile
+
+import stealth_requests as requests
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -95,14 +96,13 @@ def ensure_ublock() -> Path:
     print("Downloading uBlock Origin Lite...")
     if EXTENSION_DIR.exists():
         shutil.rmtree(EXTENSION_DIR)
-    api = urllib.request.urlopen(
+    release = requests.get(
         "https://api.github.com/repos/uBlockOrigin/uBOL-home/releases/latest"
-    )
-    release = json.load(api)
+    ).json()
     asset = next(a for a in release["assets"] if "chromium" in a["name"])
     zip_path = EXTENSION_DIR.parent / asset["name"]
     EXTENSION_DIR.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(asset["browser_download_url"], zip_path)
+    zip_path.write_bytes(requests.get(asset["browser_download_url"]).content)
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(EXTENSION_DIR)
     zip_path.unlink()
@@ -118,7 +118,7 @@ def ensure_bpc() -> Path:
         shutil.rmtree(BPC_DIR)
     BPC_DIR.parent.mkdir(parents=True, exist_ok=True)
     zip_path = BPC_DIR.parent / "bypass-paywalls-clean.zip"
-    urllib.request.urlretrieve(BPC_URL, zip_path)
+    zip_path.write_bytes(requests.get(BPC_URL).content)
     with zipfile.ZipFile(zip_path) as zf:
         top = zf.namelist()[0].split("/")[0]
         zf.extractall(BPC_DIR.parent)
@@ -133,7 +133,7 @@ def ensure_readability() -> Path:
         return READABILITY_JS
     print("Downloading Readability.js...")
     READABILITY_JS.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(READABILITY_URL, READABILITY_JS)
+    READABILITY_JS.write_bytes(requests.get(READABILITY_URL).content)
     print(f"Installed to {READABILITY_JS}")
     return READABILITY_JS
 
@@ -143,7 +143,7 @@ def ensure_defuddle() -> Path:
         return DEFUDDLE_JS
     print("Downloading defuddle...")
     DEFUDDLE_JS.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(DEFUDDLE_URL, DEFUDDLE_JS)
+    DEFUDDLE_JS.write_bytes(requests.get(DEFUDDLE_URL).content)
     print(f"Installed to {DEFUDDLE_JS}")
     return DEFUDDLE_JS
 
