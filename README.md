@@ -1,6 +1,6 @@
 # Readable
 
-A simple web service to fetch web articles and reformat them to just the article text for easier reading. Optionally uploads the result to Cloudflare R2.
+A simple web service to fetch web articles and reformat them to just the article text for easier reading. Optionally uploads the result to Cloudflare R2 (there's a generous free tier!).
 
 <img width="1414" height="282" alt="screenshot" src="https://github.com/user-attachments/assets/f32265df-8973-4ad4-ba28-8977e27dcdaa" />
 
