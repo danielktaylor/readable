@@ -44,22 +44,12 @@ docker compose up -d --build
 
 Camoufox and the browser extensions are installed on first run and updated weekly.
 
-* **Python package / base image** updates still come from rebuilding the image:
+**Python package / base image** updates still come from rebuilding the image:
 
   ```bash
   docker compose build --pull
   docker compose up -d
   ```
-
-### Timezone settings
-
-```ini
-# Container timezone for the weekly update (default UTC)
-TZ=America/Los_Angeles
-
-# Local hour (0-23) for the weekly browser update
-CAMOUFOX_UPDATE_HOUR=3
-```
 
 ## Cloudflare R2 (persistent public URLs)
 
