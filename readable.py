@@ -107,6 +107,25 @@ BLOCK_TITLES = (
     "you have been blocked",
 )
 
+# Calibre's nytimes recipe waits out the anti-bot interstitial: the first
+# request from an unscored browser gets a 403 while the page's scripts score
+# the browser, then a reload normally gets the real page. The same browser
+# context (cookies included) must be used for every attempt.
+BOT_CHECK_RETRIES = 4
+BOT_CHECK_DELAY_MS = 5_000
+CHALLENGE_STATUSES = {403, 429}
+CHALLENGE_MARKERS = (
+    "just a moment",
+    "attention required",
+    "captcha-delivery.com",
+    "datadome",
+    "verify you are human",
+    "px-captcha",
+    "perimeterx",
+    "unusual traffic",
+    "enable javascript and cookies to continue",
+)
+
 
 class FetchBlocked(RuntimeError):
     """The page was a bot challenge / block page instead of an article."""
@@ -626,6 +645,41 @@ async def _settle(page) -> None:
     await page.wait_for_timeout(1500)
 
 
+def _is_challenge(response, html: str) -> bool:
+    if response is not None and response.status in CHALLENGE_STATUSES:
+        return True
+    low = html.lower()
+    return any(marker in low for marker in CHALLENGE_MARKERS)
+
+
+async def _load_with_bot_check(page, url: str):
+    """Load a URL, retrying the anti-bot interstitial in the same context.
+
+    Mirrors calibre.web.automate.bot_check: 4 total attempts, 5 seconds apart.
+    """
+    response = await page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+    for attempt in range(1, BOT_CHECK_RETRIES + 1):
+        await _settle(page)
+        html = await page.content()
+        if not _is_challenge(response, html):
+            return response
+        if attempt == BOT_CHECK_RETRIES:
+            print(
+                f"Bot check still present after {BOT_CHECK_RETRIES} attempts",
+                flush=True,
+            )
+            return response
+        status = response.status if response is not None else "?"
+        print(
+            f"Bot check (status {status}); waiting 5s before retry "
+            f"{attempt}/{BOT_CHECK_RETRIES - 1}",
+            flush=True,
+        )
+        await page.wait_for_timeout(BOT_CHECK_DELAY_MS)
+        response = await page.reload(wait_until="domcontentloaded", timeout=60_000)
+    return response
+
+
 async def _extract(page, readability_src: str, defuddle_src: str) -> dict:
     return await page.evaluate(
         f"""() => {{
@@ -687,8 +741,7 @@ async def fetch_article(url: str, output: Path, debug: bool = False) -> bool:
         async with AsyncCamoufox(**_launch_kwargs(ublock, bpc, debug)) as browser:
             page = await browser.new_page()
             try:
-                await page.goto(url, wait_until="domcontentloaded", timeout=60_000)
-                await _settle(page)
+                response = await _load_with_bot_check(page, url)
 
                 if debug:
                     screenshot = BASE_DIR / "debug.png"
@@ -703,10 +756,16 @@ async def fetch_article(url: str, output: Path, debug: bool = False) -> bool:
                     raise FetchBlocked("Blocked by bot detection")
 
                 if article is None:
-                    # Some paywall/extension logic only applies on a second load.
-                    # Retry once rather than on every request.
-                    print("No article on first load; reloading once...")
-                    await page.reload(wait_until="domcontentloaded", timeout=60_000)
+                    html = await page.content()
+                    if _is_challenge(response, html):
+                        # The bot-check loop already made all its attempts.
+                        raise FetchBlocked("Blocked by bot detection")
+                    # A normal 200 page that did not yield an article yet:
+                    # give paywall/extension timing one more load.
+                    print("No article on first load; reloading once...", flush=True)
+                    response = await page.reload(
+                        wait_until="domcontentloaded", timeout=60_000
+                    )
                     await _settle(page)
                     article = _best_article(
                         await _extract(page, readability_src, defuddle_src)
