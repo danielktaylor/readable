@@ -4,38 +4,61 @@ A simple web service to fetch web articles and reformat them to just the article
 
 <img width="1414" height="282" alt="screenshot" src="https://github.com/user-attachments/assets/f32265df-8973-4ad4-ba28-8977e27dcdaa" />
 
-
 Under the hood it uses:
 
-* Headless Chromium
+* [Camoufox](https://camoufox.com/)
 * [Readability.js](https://github.com/mozilla/readability)
 * [Defuddle](https://github.com/kepano/defuddle)
-* [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home)
-* [Bypass Paywalls Clean](https://gitflic.ru/project/magnolia1234/bypass-paywalls-chrome-clean)
+* [uBlock Origin](https://github.com/gorhill/uBlock)
+* [Bypass Paywalls Clean](https://gitflic.ru/project/magnolia1234/bypass-paywalls-firefox-clean)
 
-The Chrome extensions, readability.js, and defuddle are downloaded automatically on first run and updated weekly.
+All of them are downloaded automatically inside the container and refreshed weekly.
 
 ## Usage
 
 ### Local
 
 ```bash
-# First-time setup
-uv run --with patchright python -m patchright install chromium
-
-# Start the server
+# Start the server. The first run downloads the Camoufox browser.
 uv run readable.py
 
-# Debug mode: opens a visible Chrome window and pauses before extracting
+# Debug mode: opens a visible browser (or saves debug.png on a headless install)
 uv run readable.py --debug
+```
+
+On Linux, Camoufox's virtual display also needs Xvfb and util-linux (`setpriv`).
+
+```bash
+sudo apt-get install -y xvfb util-linux
 ```
 
 ### Docker
 
 ```bash
 cp .env.sample .env
-# edit .env and fill in your Cloudflare R2 credentials
+# edit .env and fill in your Cloudflare R2 credentials (optional)
 docker compose up -d --build
+```
+
+## Version updates
+
+Camoufox and the browser extensions are installed on first run and updated weekly.
+
+* **Python package / base image** updates still come from rebuilding the image:
+
+  ```bash
+  docker compose build --pull
+  docker compose up -d
+  ```
+
+### Timezone settings
+
+```ini
+# Container timezone for the weekly update (default UTC)
+TZ=America/Los_Angeles
+
+# Local hour (0-23) for the weekly browser update
+CAMOUFOX_UPDATE_HOUR=3
 ```
 
 ## Cloudflare R2 (persistent public URLs)

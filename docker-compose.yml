@@ -8,16 +8,33 @@ services:
     env_file:
       - .env
     environment:
-      - NO_SANDBOX=1
+      # Larger than the generated fingerprint screens so the Xvfb root can fit
+      # a maximized browser window.
+      - CAMOUFOX_VIRTUAL_DISPLAY_SIZE=2560x1440x24
+      # Used by the weekly Camoufox update schedule (default UTC).
+      - TZ=${TZ:-UTC}
+    # Firefox needs more shared memory than Docker's 64 MB default.
+    shm_size: "1gb"
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
     volumes:
-      - ${HOME}/volumes/readable/extensions:/app/extensions
+      # Persists uBlock Origin, Bypass Paywalls Clean, Readability.js and
+      # defuddle across container rebuilds. The app updates them itself.
+      - readable_extensions:/app/extensions
+      # Persists the Camoufox browser between restarts. It is fetched on first
+      # start and updated weekly.
+      # Mount the cache *parent*: camoufox's fetch removes ~/.cache/camoufox
+      # itself, which fails with EBUSY if that path is the volume mountpoint.
+      - readable_camoufox:/home/camoufox/.cache
     networks:
       - caddy-network
+
+volumes:
+  readable_extensions:
+  readable_camoufox:
 
 networks:
   caddy-network:
